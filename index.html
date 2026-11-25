@@ -402,7 +402,7 @@ function renderDrawer(){
       預設用<b>能完成的最低模型</b>、最少步驟。被兩人否決 → 執行者<b>升一級</b>重做；已是最高就換人。用量超過 75% 的成員避開執行。用量為本機依 token 數估算。</div>`+
       BOTS.map(k=>{const m=S?.members?.[k];if(!m)return '';const here=online&&m.present;return `<div class="mcard ${here?'':'off'}"><div class="mhead">${here?FACE[k]():FACE.chair()}<b style="color:${META[k].color}">${META[k].name}</b><span style="font-size:12px;color:var(--muted)">${here?esc(m.version||''):esc(m.reason||'未連線')}</span></div>
       <div class="ladder">${m.ladder.map((x,i)=>`<button class="${i===m.cur?'cur':''}" ${here?`onclick="send({type:'tier',member:'${k}',tier:${i}})"`:''} title="能力 ${x.power} · 速度 ${x.speed}">${esc(x.label)}</button>`).join('')}</div>
-      <div class="meter"><i style="width:${m.usagePct||0}%;background:${(m.usagePct||0)>75?'var(--bad)':META[k].hex}"></i></div><div class="mfoot"><span>本週用量（估算）${m.usagePct||0}%</span><span>週一重置</span></div></div>`}).join('')}
+      <div class="meter"><i style="width:${m.usagePct||0}%;background:${(m.usagePct||0)>75?'var(--bad)':META[k].hex}"></i></div><div class="mfoot"><span>${m.usageSrc==='official'?`官方用量 ${m.usagePct}%${m.limits?`（5小時 ${m.limits.short??'—'}%／本週 ${m.limits.week??'—'}%）`:''}`:`本週用量（估算）${m.usagePct||0}%`}</span><span>週一重置</span></div></div>`}).join('')}
   if(drawerKind==='sync'){T.textContent=LOCAL?'連線狀態':'GitHub 設定';
     if(LOCAL){const g=S?.agent?.github||{},c=S?.agent?.ghConf||{};if(B.querySelector('#gOwner'))return;
       B.innerHTML=`<div class="note">${g.enabled?(g.error?'<b style="color:var(--bad)">同步失敗</b>：'+esc(g.error):'<b style="color:var(--green)">GitHub 已連上</b> · 上次同步 '+ago(g.syncedAt)):'貼上電腦用的權杖後按「儲存並連線」，圓桌會先驗證再存檔。'}</div>
