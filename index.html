@@ -51,7 +51,7 @@ svg{display:block}
 .hint{font-size:12px;color:var(--faint);font-weight:400}
 .seat{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
 .bot{position:relative;width:var(--bot);height:var(--bot);transition:transform .45s cubic-bezier(.3,1.4,.5,1),rotate .5s}
-.bot .ring{position:absolute;inset:-8px}
+.bot .ring{position:absolute;left:-8px;top:-8px;width:calc(100% + 16px);height:calc(100% + 16px);display:block;overflow:visible} /* Safari：絕對定位的 svg 不會被 inset 撐開，要給明確寬高 */
 .bot .ring circle{fill:none;stroke-width:3;stroke-linecap:round}
 .bot .face{position:absolute;inset:0;border-radius:50%;overflow:hidden}
 .bot .face svg{width:100%;height:100%}
@@ -183,7 +183,7 @@ td .mini{width:22px;height:22px}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 .viewer{position:fixed;inset:0;background:#000d;z-index:50;display:none;place-items:center;padding:20px}
 .viewer.on{display:grid}.viewer img{max-width:100%;max-height:100%;border-radius:10px}
-@media (max-width:760px){
+@media (max-width:760px),(max-height:520px){
   :root{--bot:56px}
   .top{height:54px;padding:0 10px;gap:4px}
   .brand small,.pill span{display:none}
@@ -199,6 +199,12 @@ td .mini{width:22px;height:22px}
   .seat .name{font-size:12px}.model{font-size:10px;padding:2px 6px;max-width:84px;overflow:hidden;text-overflow:ellipsis}
   .role{top:-24px;font-size:10px;padding:2px 8px}.vote{width:24px;height:24px;font-size:12px;right:-8px}
   .gallery{grid-template-columns:1fr}
+}
+@media (max-height:520px) and (min-width:561px){
+  :root{--bot:44px}
+  .seat{gap:3px}.seat .name{font-size:11px}.model{display:none}
+  .table{width:46vw;height:40vh}.center{width:40vw}
+  .seat.you .bot{--bot:44px;width:44px;height:44px}
 }
 </style>
 </head>
@@ -247,7 +253,7 @@ const FACE={
 };
 const BOTS=['claude','codex','gemini'];
 const META={claude:{name:'Claude',color:'var(--claude)',hex:'#ee8a62'},codex:{name:'Codex',color:'var(--codex)',hex:'#3cc3a0'},gemini:{name:'Gemini',color:'var(--gemini)',hex:'#7c97ff'},you:{name:'你'}};
-const mobile=()=>innerWidth<=760;
+const mobile=()=>innerWidth<=760||innerHeight<=520;
 const POS=()=>mobile()?{claude:[50,16],codex:[13,50],gemini:[87,50],you:[50,86]}:{claude:[50,17],codex:[16,55],gemini:[84,55],you:[50,92]};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const $=id=>document.getElementById(id);
@@ -292,7 +298,9 @@ for(const k of [...BOTS,'you']){
   stage.insertAdjacentHTML('beforeend',`<div class="seat ${k==='you'?'you low':''}" id="seat-${k}"><div class="bot"><div class="role" id="role-${k}"></div><div id="ring-${k}"></div><div class="face" id="face-${k}"></div><div class="vote" id="vote-${k}"></div><div class="bubble" id="bub-${k}"></div></div>${k==='you'?'':`<div class="utip" id="utip-${k}"></div>`}${k==='you'?'':`<div class="name" id="name-${k}"></div><button class="model" id="model-${k}" onclick="openDrawer('model')"></button>`}</div>`);
 }
 function place(){const P=POS();for(const k in P){const s=$('seat-'+k);s.style.left=P[k][0]+'%';s.style.top=P[k][1]+'%'}}
-addEventListener('resize',()=>{place();render()});place();
+addEventListener('resize',()=>{place();render()});
+// iOS 轉向時 innerWidth 有時晚一拍才更新：轉完再排一次
+addEventListener('orientationchange',()=>[120,400].forEach(t=>setTimeout(()=>{place();render()},t)));place();
 
 const seen={bub:{},swap:{},q:null};
 function bubble(k,text){const b=$('bub-'+k);b.textContent=text;b.classList.add('on');const s=$('seat-'+k);s.classList.remove('talk');void s.offsetWidth;s.classList.add('talk');clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove('on'),Math.min(9000,3200+String(text).length*90))}
