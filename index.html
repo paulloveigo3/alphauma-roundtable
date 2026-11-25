@@ -476,13 +476,164 @@ function makePhoneQr(){const c=S?.agent?.ghConf||{},t=$('pToken').value.trim(),b
   clearTimeout(window._qrT);window._qrT=setTimeout(()=>{const b=$('pQr');if(b)b.innerHTML=''},120000)}
 let scanStream=null;
 async function startScan(){
-  if(!('BarcodeDetector' in window)||!navigator.mediaDevices?.getUserMedia){toast('這支手機的瀏覽器不支援網頁內掃描，請直接用相機 App 掃電腦上的 QR，會自動帶入');return}
-  try{const det=new BarcodeDetector({formats:['qr_code']});scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    const v=$('scanVid');v.srcObject=scanStream;await v.play();$('scan').classList.add('on');
-    const tick=async()=>{if(!scanStream)return;try{const r=await det.detect(v);const txt=r[0]?.rawValue;
-      if(txt){if(importSetup(txt)){stopScan();location.reload();return}if(/^(github_pat_|ghp_)[A-Za-z0-9_]+$/.test(txt.trim())){$('fToken').value=txt.trim();stopScan();toast('已帶入權杖，按「儲存並連線」');return}$('scanMsg').textContent='這不是圓桌的 QR，請再試一次'}}catch{}
-      requestAnimationFrame(tick)};tick()}
-  catch(e){stopScan();toast('無法開啟相機：'+(e.name==='NotAllowedError'?'請允許相機權限':e.message))}}
+  if(!navigator.mediaDevices?.getUserMedia){toast('這個瀏覽器無法開相機（需要 https 網址）');return}
+  try{scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},audio:false});
+    const v=$('scanVid');v.srcObject=scanStream;v.setAttribute('playsinline','');await v.play();$('scan').classList.add('on');
+    let det=null;try{if('BarcodeDetector' in window&&(await BarcodeDetector.getSupportedFormats()).includes('qr_code'))det=new BarcodeDetector({formats:['qr_code']})}catch{}
+    const cv=document.createElement('canvas'),cx=cv.getContext('2d',{willReadFrequently:true});
+    const got=txt=>{if(!txt)return false;if(importSetup(txt)){stopScan();location.reload();return true}
+      const t=txt.trim();if(/^(github_pat_|ghp_)[A-Za-z0-9_]+$/.test(t)){$('fToken').value=t;stopScan();toast('已帶入權杖，按「儲存並連線」');return true}
+      $('scanMsg').textContent='這不是圓桌的 QR，請再試一次';return false};
+    const tick=async()=>{if(!scanStream)return;
+      try{if(v.readyState>=2&&v.videoWidth){let txt=null;
+        if(det){const r=await det.detect(v);txt=r[0]?.rawValue||null}
+        else{const s=Math.min(1,720/Math.max(v.videoWidth,v.videoHeight)),w=Math.round(v.videoWidth*s),hh=Math.round(v.videoHeight*s);cv.width=w;cv.height=hh;cx.drawImage(v,0,0,w,hh);
+          const d=cx.getImageData(0,0,w,hh).data,g=new Uint8Array(w*hh);for(let i=0,j=0;i<g.length;i++,j+=4)g[i]=(d[j]+2*d[j+1]+d[j+2])>>2;txt=qrDecode(g,w,hh)}
+        if(got(txt))return}}catch{}
+      setTimeout(tick,det?120:60)};tick()}
+  catch(e){stopScan();toast('無法開啟相機：'+(e.name==='NotAllowedError'?'請在瀏覽器設定允許相機權限':e.message))}}
+// 迷你 QR 解碼器：輸入灰階影像，回傳文字或 null（支援 v1-40、L/M/Q/H、byte/英數/數字模式、RS 糾錯、透視校正）
+function qrDecode(gray,w,h){
+  // ---- 二值化：積分圖 + 區域平均 ----
+  const I=new Float64Array((w+1)*(h+1));
+  for(let y=0;y<h;y++){let s=0;for(let x=0;x<w;x++){s+=gray[y*w+x];I[(y+1)*(w+1)+x+1]=I[y*(w+1)+x+1]+s}}
+  const R=Math.max(8,Math.floor(Math.min(w,h)/16)),B=new Uint8Array(w*h);
+  for(let y=0;y<h;y++){const y0=Math.max(0,y-R),y1=Math.min(h,y+R+1);for(let x=0;x<w;x++){const x0=Math.max(0,x-R),x1=Math.min(w,x+R+1);
+    const m=(I[y1*(w+1)+x1]-I[y0*(w+1)+x1]-I[y1*(w+1)+x0]+I[y0*(w+1)+x0])/((x1-x0)*(y1-y0));B[y*w+x]=gray[y*w+x]<m-6?1:0}}
+  const D=(x,y)=>{x=Math.floor(x);y=Math.floor(y);return x>=0&&y>=0&&x<w&&y<h?B[y*w+x]:0};
+  // ---- 找定位點 ----
+  const ok=(c,tol)=>{const t=c[0]+c[1]+c[2]+c[3]+c[4];if(t<7)return false;const u=t/7,v=u*tol;return Math.abs(u-c[0])<v&&Math.abs(u-c[1])<v&&Math.abs(3*u-c[2])<3*v&&Math.abs(u-c[3])<v&&Math.abs(u-c[4])<v};
+  const cross=(cx,cy,vert,tot)=>{const g=vert?(i)=>D(cx,i):(i)=>D(i,cy),L=vert?h:w,p=Math.floor(vert?cy:cx);if(!g(p))return null;
+    let i=p,c=[0,0,0,0,0];while(i>=0&&g(i))i--;const a=i+1;while(i>=0&&!g(i)){c[1]++;i--}while(i>=0&&g(i)){c[0]++;i--}
+    let j=p;while(j<L&&g(j))j++;const b=j-1;while(j<L&&!g(j)){c[3]++;j++}while(j<L&&g(j)){c[4]++;j++}c[2]=b-a+1;
+    const t=c.reduce((s,v)=>s+v,0);if(!ok(c,0.75)||5*Math.abs(t-tot)>=3*tot)return null;return{pos:(a+b+1)/2,tot:t}};
+  const C=[];
+  const found=(c,x,y)=>{const tot=c.reduce((s,v)=>s+v,0);let cx=x-c[4]-c[3]-c[2]/2;const v=cross(cx,y+0.5,true,tot);if(!v)return;const hz=cross(cx,v.pos,false,tot);if(!hz)return;cx=hz.pos;const cy=v.pos,ms=(v.tot+hz.tot)/14;
+    for(const q of C)if(Math.abs(q.x-cx)<=Math.max(ms,q.ms)&&Math.abs(q.y-cy)<=Math.max(ms,q.ms)){q.x=(q.x*q.n+cx)/(q.n+1);q.y=(q.y*q.n+cy)/(q.n+1);q.ms=(q.ms*q.n+ms)/(q.n+1);q.n++;return}
+    C.push({x:cx,y:cy,ms,n:1})};
+  for(let y=0;y<h;y++){let c=[0,0,0,0,0],s=0;
+    for(let x=0;x<=w;x++){const d=x<w?B[y*w+x]:0;
+      if(d){if(s&1)s++;c[s]++}
+      else if(s==0&&c[0]==0)continue;
+      else if(!(s&1)){if(s==4){if(ok(c,0.6))found(c,x,y);c=[c[2],c[3],c[4],1,0];s=3}else{s++;c[s]++}}
+      else c[s]++}}
+  if(C.length<3)return null;
+  const P=C.sort((a,b)=>b.n-a.n).slice(0,8),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const tries=[];
+  for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++)for(let k=j+1;k<P.length;k++){
+    let t=[P[i],P[j],P[k]];const ds=[dist(t[1],t[2]),dist(t[0],t[2]),dist(t[0],t[1])];const hi=ds.indexOf(Math.max(...ds));
+    const tl=t[hi],o=t.filter((_,q)=>q!=hi);let [tr,bl]=o;if((tr.x-tl.x)*(bl.y-tl.y)-(tr.y-tl.y)*(bl.x-tl.x)<0)[tr,bl]=[bl,tr];
+    const d1=dist(tl,tr),d2=dist(tl,bl),hyp=ds[hi],ms=[tl,tr,bl].map(q=>q.ms);
+    const geo=Math.abs(d1-d2)/Math.max(d1,d2)+Math.abs(hyp-Math.hypot(d1,d2))/hyp;if(geo>0.6||Math.min(d1,d2)<Math.max(...ms)*14)continue;
+    const sc=geo+0.3*(Math.max(...ms)/Math.min(...ms)-1)-0.08*Math.log(tl.n*tr.n*bl.n);tries.push({sc,tl,tr,bl})}
+  tries.sort((a,b)=>a.sc-b.sc);
+  // 沿著兩個定位點連線量模組寬（避免旋轉時高估）
+  const run=(a,b)=>{const L=dist(a,b),ux=(b.x-a.x)/L,uy=(b.y-a.y)/L;let len=0;
+    for(const sg of[1,-1]){let st=0,d=0;for(;d<a.ms*12;d+=0.5){const v=D(a.x+sg*ux*d,a.y+sg*uy*d);if(st==0&&!v)st=1;else if(st==1&&v)st=2;else if(st==2&&!v)break}len+=d}
+    return len/7};
+  const vinfo=(c,ex,ey,swap)=>{let v=0;for(let i=0;i<18;i++){const a=i%3,b=Math.floor(i/3);const du=swap?b-3:a-7,dv=swap?a-7:b-3;v|=D(c.x+du*ex.x+dv*ey.x,c.y+du*ex.y+dv*ey.y)<<i}return v};
+  for(const t of tries.slice(0,6)){
+    const m1=(run(t.tl,t.tr)+run(t.tr,t.tl))/2,m2=(run(t.tl,t.bl)+run(t.bl,t.tl))/2;if(!m1||!m2)continue;
+    const dim=((dist(t.tl,t.tr)/m1)+(dist(t.tl,t.bl)/m2))/2+7;let base=Math.round((dim-17)/4)*4+17;
+    const cand=[base];
+    if(base>=41){const u1=dist(t.tl,t.tr),u2=dist(t.tl,t.bl);
+      const exr={x:(t.tr.x-t.tl.x)/u1*m1,y:(t.tr.y-t.tl.y)/u1*m1},eyr={x:(t.bl.x-t.tl.x)/u2*m2,y:(t.bl.y-t.tl.y)/u2*m2};
+      for(const raw of[vinfo(t.tr,exr,eyr,false),vinfo(t.bl,exr,eyr,true)]){let bv=0,bd=99;for(let v=7;v<=40;v++){let r=v;for(let i=0;i<12;i++)r=(r<<1)^((r>>>11)*0x1F25);let x=((v<<12)|r)^raw,c=0;while(x){c+=x&1;x>>>=1}if(c<bd){bd=c;bv=v}}
+        if(bd<=3){const n=bv*4+17;if(!cand.includes(n))cand.unshift(n)}}}
+    for(const d of[-4,4,-8,8])cand.push(base+d);
+    for(const N of cand){if(N<21||N>177)continue;const r=readGrid(t,N);if(r!=null)return r}}
+  return null;
+
+  function readGrid({tl,tr,bl},N){
+    const ex={x:(tr.x-tl.x)/(N-7),y:(tr.y-tl.y)/(N-7)},ey={x:(bl.x-tl.x)/(N-7),y:(bl.y-tl.y)/(N-7)};
+    const par={x:tr.x+bl.x-tl.x,y:tr.y+bl.y-tl.y},opts=[];
+    if(N>21){const E={x:tl.x+(N-10)*(ex.x+ey.x),y:tl.y+(N-10)*(ex.y+ey.y)},R=Math.min(14,4+N/8),found=[];
+      const tpl=(px,py,k)=>{let s=0;for(let u=-2;u<=2;u++)for(let v=-2;v<=2;v++)s+=(D(px+k*(u*ex.x+v*ey.x),py+k*(u*ex.y+v*ey.y))==(Math.max(Math.abs(u),Math.abs(v))!=1?1:0))?1:0;return s};
+      for(let a=-R;a<=R;a+=0.5)for(let b=-R;b<=R;b+=0.5){const px=E.x+a*ex.x+b*ey.x,py=E.y+a*ex.y+b*ey.y;if(!D(px,py))continue;
+        let bs=0,bk=1;for(const k of[0.7,0.8,0.9,1,1.1,1.25,1.4]){const s=tpl(px,py,k);if(s>bs){bs=s;bk=k}}
+        if(bs>=19)found.push({x:px,y:py,k:bk,s:bs-Math.hypot(a,b)*0.02})}
+      found.sort((p,q)=>q.s-p.s);
+      for(const f of found){if(opts.length>=3)break;if(opts.some(o=>Math.hypot(o.x-f.x,o.y-f.y)<2*Math.hypot(ex.x,ex.y)))continue;
+        let b2=-1,q=f;for(let dx=-0.5;dx<=0.5;dx+=0.25)for(let dy=-0.5;dy<=0.5;dy+=0.25){const px=f.x+dx*f.k*Math.hypot(ex.x,ex.y),py=f.y+dy*f.k*Math.hypot(ey.x,ey.y),s=tpl(px,py,f.k);if(s>b2){b2=s;q={x:px,y:py}}}
+        opts.push(q)}}
+    const cands=opts.map(o=>[o,N-6.5]).concat([[par,N-3.5]]);
+    for(const[br,bm]of cands){
+      const H=homo([[3.5,3.5],[N-3.5,3.5],[3.5,N-3.5],[bm,bm]],[[tl.x,tl.y],[tr.x,tr.y],[bl.x,bl.y],[br.x,br.y]]);if(!H)continue;
+      const at=(u,v)=>{const z=H[6]*u+H[7]*v+1;return D((H[0]*u+H[1]*v+H[2])/z,(H[3]*u+H[4]*v+H[5])/z)};
+      const M=[];for(let y=0;y<N;y++){M.push([]);for(let x=0;x<N;x++)M[y].push(at(x+0.5,y+0.5))}
+      try{return decodeMatrix(M)}catch{}}
+    return null;
+  }
+  function homo(s,d){const A=[],b=[];for(let i=0;i<4;i++){const[u,v]=s[i],[x,y]=d[i];A.push([u,v,1,0,0,0,-u*x,-v*x]);b.push(x);A.push([0,0,0,u,v,1,-u*y,-v*y]);b.push(y)}
+    for(let c=0;c<8;c++){let p=c;for(let r=c+1;r<8;r++)if(Math.abs(A[r][c])>Math.abs(A[p][c]))p=r;if(Math.abs(A[p][c])<1e-9)return null;[A[c],A[p]]=[A[p],A[c]];[b[c],b[p]]=[b[p],b[c]];
+      for(let r=0;r<8;r++)if(r!=c){const f=A[r][c]/A[c][c];for(let k=c;k<8;k++)A[r][k]-=f*A[c][k];b[r]-=f*b[c]}}
+    return b.map((v,i)=>v/A[i][i])}
+}
+function decodeMatrix(M){
+  const N=M.length,ver=(N-17)/4;if(ver%1||ver<1||ver>40)throw 0;
+  const EC={1:[-1,7,10,15,20,26,18,20,24,30,18,20,24,26,30,22,24,28,30,28,28,28,28,30,30,26,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],
+    0:[-1,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28],
+    3:[-1,13,22,18,26,18,24,18,22,20,24,28,26,24,20,30,24,28,28,26,30,28,30,30,30,30,28,30,30,30,30,30,30,30,30,30,30,30,30,30,30],
+    2:[-1,17,28,22,16,22,28,26,26,24,28,24,28,22,24,24,30,28,28,26,28,30,24,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30,30]};
+  const NBk={1:[-1,1,1,1,1,1,2,2,2,2,4,4,4,4,4,6,6,6,6,7,8,8,9,9,10,12,12,12,13,14,15,16,17,18,19,19,20,21,22,24,25],
+    0:[-1,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49],
+    3:[-1,1,1,2,2,4,4,6,6,8,8,8,10,12,16,12,17,16,18,21,20,23,23,25,27,29,34,34,35,38,40,43,45,48,51,53,56,59,62,65,68],
+    2:[-1,1,1,2,4,4,4,5,6,8,8,11,11,16,16,18,16,19,21,25,25,25,34,30,32,35,37,40,42,45,48,51,54,57,60,63,66,70,74,77,81]};
+  // 格式資訊
+  const fmtCode=d=>{let r=d;for(let i=0;i<10;i++)r=(r<<1)^((r>>>9)*0x537);return((d<<10)|r)^0x5412};
+  const g=(x,y)=>M[y][x]?1:0;let f1=0,f2=0;
+  for(let i=0;i<=5;i++)f1|=g(8,i)<<i;f1|=g(8,7)<<6;f1|=g(8,8)<<7;f1|=g(7,8)<<8;for(let i=9;i<15;i++)f1|=g(14-i,8)<<i;
+  for(let i=0;i<8;i++)f2|=g(N-1-i,8)<<i;for(let i=8;i<15;i++)f2|=g(8,N-15+i)<<i;
+  const pc=v=>{let c=0;while(v){c+=v&1;v>>>=1}return c};let bd=99,ecl=0,mask=0;
+  for(let d=0;d<32;d++){const c=fmtCode(d);for(const f of[f1,f2]){const e=pc(c^f);if(e<bd){bd=e;ecl=d>>3;mask=d&7}}}
+  if(bd>3)throw 0;
+  // 功能區
+  const F=[...Array(N)].map(()=>Array(N).fill(false)),set=(x,y)=>{F[y][x]=true};
+  for(let i=0;i<N;i++){set(6,i);set(i,6)}
+  for(const[cx,cy]of[[3,3],[N-4,3],[3,N-4]])for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){const xx=cx+dx,yy=cy+dy;if(xx>=0&&xx<N&&yy>=0&&yy<N)set(xx,yy)}
+  const al=[];if(ver>1){const n=Math.floor(ver/7)+2,st=ver==32?26:Math.ceil((ver*4+4)/(n*2-2))*2;for(let i=0;i<n-1;i++)al.unshift(N-7-i*st);al.unshift(6)}
+  al.forEach((a,i)=>al.forEach((b,j)=>{if(!((i==0&&j==0)||(i==0&&j==al.length-1)||(i==al.length-1&&j==0)))for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)set(a+dx,b+dy)}));
+  for(let i=0;i<9;i++){set(8,i);set(i,8)}for(let i=0;i<8;i++){set(N-1-i,8);set(8,N-1-i)}
+  if(ver>=7)for(let i=0;i<18;i++){const a=N-11+i%3,c=Math.floor(i/3);set(a,c);set(c,a)}
+  const MK=[(x,y)=>(x+y)%2==0,(x,y)=>y%2==0,(x,y)=>x%3==0,(x,y)=>(x+y)%3==0,(x,y)=>(Math.floor(x/3)+Math.floor(y/2))%2==0,(x,y)=>x*y%2+x*y%3==0,(x,y)=>(x*y%2+x*y%3)%2==0,(x,y)=>((x+y)%2+x*y%3)%2==0][mask];
+  const raw=(()=>{let r=(16*ver+128)*ver+64;if(ver>=2){const n=Math.floor(ver/7)+2;r-=(25*n-10)*n-55;if(ver>=7)r-=36}return r})();
+  const rc=Math.floor(raw/8),all=new Array(rc).fill(0);let i=0;
+  for(let right=N-1;right>=1;right-=2){if(right==6)right=5;for(let vv=0;vv<N;vv++)for(let j=0;j<2;j++){const x=right-j,y=((right+1)&2)==0?N-1-vv:vv;
+    if(!F[y][x]&&i<rc*8){if((M[y][x]?1:0)^(MK(x,y)?1:0))all[i>>>3]|=1<<(7-(i&7));i++}}}
+  // 拆區塊 + 糾錯
+  const ecc=EC[ecl][ver],nb=NBk[ecl][ver],ns=nb-rc%nb,sl=Math.floor(rc/nb);
+  const blocks=[...Array(nb)].map(()=>new Array(sl+1).fill(0));let k=0;
+  for(let a=0;a<=sl;a++)for(let j=0;j<nb;j++)if(a!=sl-ecc||j>=ns)blocks[j][a]=all[k++];
+  const data=[];blocks.forEach((b,j)=>{if(j<ns)b.splice(sl-ecc,1);const c=rsFix(b,ecc);if(!c)throw 0;data.push(...c.slice(0,c.length-ecc))});
+  // 解資料
+  let p=0;const rd=n=>{let v=0;for(let q=0;q<n;q++){v=(v<<1)|((data[p>>>3]>>>(7-(p&7)))&1);p++}return v};
+  const AL='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';let out=[];const tot=data.length*8;
+  while(p+4<=tot){const md=rd(4);if(md==0)break;
+    if(md==4){const n=rd(ver<10?8:16);for(let q=0;q<n;q++)out.push(rd(8))}
+    else if(md==2){let n=rd(ver<10?9:ver<27?11:13);for(;n>=2;n-=2){const v=rd(11);out.push(AL.charCodeAt(Math.floor(v/45)),AL.charCodeAt(v%45))}if(n)out.push(AL.charCodeAt(rd(6)))}
+    else if(md==1){let n=rd(ver<10?10:ver<27?12:14);for(;n>=3;n-=3)String(rd(10)).padStart(3,'0').split('').forEach(c=>out.push(c.charCodeAt(0)));if(n==2)String(rd(7)).padStart(2,'0').split('').forEach(c=>out.push(c.charCodeAt(0)));if(n==1)out.push(48+rd(4))}
+    else if(md==7)rd(8);else break}
+  return new TextDecoder().decode(new Uint8Array(out));
+}
+// Reed-Solomon 糾錯（GF(256)，生成根從 α^0 起）
+function rsFix(cw,t){
+  const E=new Array(512),L=new Array(256);let x=1;for(let i=0;i<255;i++){E[i]=x;L[x]=i;x<<=1;if(x&256)x^=0x11D}for(let i=255;i<512;i++)E[i]=E[i-255];
+  const mul=(a,b)=>a&&b?E[L[a]+L[b]]:0,dv=(a,b)=>a?E[(L[a]+255-L[b])%255]:0,n=cw.length;
+  const S=[];let bad=false;for(let i=0;i<t;i++){let s=0;for(let j=0;j<n;j++)s=mul(s,E[i])^cw[j];S.push(s);if(s)bad=true}
+  if(!bad)return cw;
+  let Cp=[1],Bp=[1],Lc=0,m=1,b=1;
+  for(let r=0;r<t;r++){let d=S[r];for(let i=1;i<=Lc;i++)d^=mul(Cp[i]||0,S[r-i]);
+    if(d==0){m++;continue}const T=Cp.slice(),f=dv(d,b);const NC=Cp.slice();while(NC.length<Bp.length+m)NC.push(0);Bp.forEach((v,i)=>NC[i+m]^=mul(f,v));
+    if(2*Lc<=r){Lc=r+1-Lc;Bp=T;b=d;m=1}else m++;Cp=NC}
+  const ev=(P,xv)=>{let s=0,pw=1;for(const c of P){s^=mul(c,pw);pw=mul(pw,xv)}return s};
+  const pos=[];for(let j=0;j<n;j++){const pw=n-1-j,inv=E[(255-pw%255)%255];if(ev(Cp,inv)==0)pos.push(j)}
+  if(pos.length!=Lc||Lc*2>t)return null;
+  const Om=new Array(t).fill(0);for(let i=0;i<t;i++)for(let j=0;j<Cp.length&&i+j<t;j++)Om[i+j]^=mul(S[i],Cp[j]);
+  const dC=Cp.map((c,i)=>i&1?c:0).slice(1);const out=cw.slice();
+  for(const j of pos){const pw=n-1-j,X=E[pw%255],Xi=E[(255-pw%255)%255];const den=ev(dC,Xi);if(!den)return null;out[j]^=mul(X,dv(ev(Om,Xi),den))}
+  return out;
+}
+
 function stopScan(){if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}$('scan').classList.remove('on');$('scanMsg').textContent='對準電腦上的 QR code'}
 const who=k=>META[k]?.name||k;
 function dl(n,t,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click()}
