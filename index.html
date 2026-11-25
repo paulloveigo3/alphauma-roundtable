@@ -171,6 +171,12 @@ td .mini{width:22px;height:22px}
 .form label{display:block;font-size:12px;color:var(--muted);margin:12px 0 5px}
 .form input{width:100%;height:40px;border-radius:11px;border:1px solid var(--line);background:#ffffff08;color:var(--ink);padding:0 12px;font:inherit;font-size:15px;outline:none}
 .form input:focus{border-color:var(--green)}
+.inrow{display:flex;gap:8px}.inrow input{flex:1}.inrow .btn{flex:none;height:40px}
+.qrbox{margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px}.qrbox svg{width:220px;height:220px;border-radius:12px}
+.qrbox small{color:var(--muted);font-size:12px;text-align:center}
+#scan{position:fixed;inset:0;z-index:99;background:#000d;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#scan.on{display:flex}#scan video{width:min(86vw,420px);aspect-ratio:1;object-fit:cover;border-radius:18px;border:2px solid var(--green)}
+#scan p{color:#fff;font-size:14px;margin:0}
 .kv{display:grid;grid-template-columns:96px 1fr;gap:9px 12px;font-size:13px}
 .kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-all}
 .toast{position:fixed;bottom:calc(110px + env(safe-area-inset-bottom));left:50%;transform:translate(-50%,10px);opacity:0;background:var(--panel2);border:1px solid var(--line);padding:9px 16px;border-radius:12px;font-size:13px;z-index:40;transition:.3s;pointer-events:none;white-space:nowrap}
@@ -210,6 +216,7 @@ td .mini{width:22px;height:22px}
 <main class="stage" id="stage">
   <div class="table"></div>
   <div class="center"><div class="title" id="cTitle"></div><div class="sub" id="cSub"></div><div class="steps" id="steps"></div><button class="stopbtn" id="stopBtn" onclick="stopTask()"><i></i>停止</button></div>
+  <div id="scan"><video id="scanVid" playsinline muted></video><p id="scanMsg">對準電腦上的 QR code</p><button class="btn" onclick="stopScan()">取消</button></div>
   <div class="token" id="token"><div class="paper"></div><div class="prog"><i id="prog"></i></div><div class="stamp" id="stamp"></div></div>
 </main>
 
@@ -248,6 +255,8 @@ const $=id=>document.getElementById(id);
 // ================= transport =================
 const LOCAL=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)&&location.protocol==='http:';
 let S=null, online=false, lastUpdate=0;
+function importSetup(text){const m=String(text).match(/#s=([^/\s]+)\/([^/\s]+)\/([A-Za-z0-9_]+)/);if(!m)return false;localStorage.setItem('roundtable.gh',JSON.stringify({owner:decodeURIComponent(m[1]),repo:decodeURIComponent(m[2]),token:m[3],branch:'main'}));return true}
+if(!LOCAL&&location.hash.startsWith('#s=')){importSetup(location.href);history.replaceState(null,'',location.pathname+location.search)}
 const gh=JSON.parse(localStorage.getItem('roundtable.gh')||'{}');
 const ghApi=(m,p,body,accept)=>fetch((gh.api||'https://api.github.com')+p,{method:m,cache:'no-store',headers:{Authorization:'Bearer '+gh.token,Accept:accept||'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},body:body?JSON.stringify(body):undefined});
 function connect(){
@@ -411,10 +420,70 @@ function renderDrawer(){
       <label>手機網頁 repo（公開）</label><input id="gWeb" value="${esc(c.webRepo||'alphauma-roundtable')}" autocapitalize="off" spellcheck="false">
       <label>權杖</label><input id="gToken" type="password" placeholder="${c.hasToken?'已設定，留空就不變':'貼上 github_pat_…'}" autocomplete="off">
       <p style="margin-top:14px;display:flex;gap:8px"><button class="btn pri" id="ghSave" onclick="saveGhLocal()">儲存並連線</button><button class="btn" onclick="fetch('/api/redetect',{method:'POST',headers:{'X-Roundtable':'1'}}).then(()=>toast('已重新偵測成員'))">重新偵測成員</button></p><div class="msg" id="ghMsg"></div>
-      ${c.pagesUrl?`<label>手機網址</label><div class="urlrow"><code>${esc(c.pagesUrl)}</code><button class="btn" onclick="copyText('${esc(c.pagesUrl)}')">複製</button></div>`:''}</div>`}
-    else{if(B.querySelector('#fOwner'))return;B.innerHTML=`<div class="note">資料存在你的<b>私有 repo</b>。權杖只存在這支手機的瀏覽器裡。</div><div class="form"><label>GitHub 帳號</label><input id="fOwner" value="${esc(gh.owner||'')}" autocapitalize="off"><label>資料 repo</label><input id="fRepo" value="${esc(gh.repo||'alphauma-roundtable-data')}" autocapitalize="off"><label>權杖（fine-grained token）</label><input id="fToken" type="password" value="${esc(gh.token||'')}"><p style="margin-top:16px;display:flex;gap:8px"><button class="btn pri" onclick="saveGh()">儲存並連線</button>${gh.token?'<button class="btn" onclick="localStorage.removeItem(\'roundtable.gh\');location.reload()">登出</button>':''}</p>${ghErr?`<p style="color:var(--bad);font-size:12px">讀取失敗（${ghErr}），請確認帳號、repo 與權杖。</p>`:''}${S?`<p style="color:var(--muted);font-size:12px">本機最後回報：${ago(S.agent.seenAt)}</p>`:''}</div>`}}
+      ${c.pagesUrl?`<label>手機連線 QR（貼上手機用權杖，只在這個視窗產生，不會存檔或上傳）</label><div class="inrow"><input id="pToken" type="password" placeholder="貼上手機用 github_pat_…" autocomplete="off"><button class="btn" onclick="makePhoneQr()">產生 QR</button></div><div class="qrbox" id="pQr"></div><label>手機網址</label><div class="urlrow"><code>${esc(c.pagesUrl)}</code><button class="btn" onclick="copyText('${esc(c.pagesUrl)}')">複製</button></div>`:''}</div>`}
+    else{if(B.querySelector('#fOwner'))return;B.innerHTML=`<div class="note">資料存在你的<b>私有 repo</b>。權杖只存在這支手機的瀏覽器裡。</div><div class="form"><label>GitHub 帳號</label><input id="fOwner" value="${esc(gh.owner||'')}" autocapitalize="off"><label>資料 repo</label><input id="fRepo" value="${esc(gh.repo||'alphauma-roundtable-data')}" autocapitalize="off"><label>權杖（fine-grained token）</label><div class="inrow"><input id="fToken" type="password" value="${esc(gh.token||'')}" autocomplete="off"><button class="btn" onclick="startScan()">掃描 QR</button></div><p style="margin-top:16px;display:flex;gap:8px"><button class="btn pri" onclick="saveGh()">儲存並連線</button>${gh.token?'<button class="btn" onclick="localStorage.removeItem(\'roundtable.gh\');location.reload()">登出</button>':''}</p>${ghErr?`<p style="color:var(--bad);font-size:12px">讀取失敗（${ghErr}），請確認帳號、repo 與權杖。</p>`:''}${S?`<p style="color:var(--muted);font-size:12px">本機最後回報：${ago(S.agent.seenAt)}</p>`:''}</div>`}}
 }
 function saveGh(){localStorage.setItem('roundtable.gh',JSON.stringify({owner:$('fOwner').value.trim(),repo:$('fRepo').value.trim(),token:$('fToken').value.trim(),branch:'main'}));location.reload()}
+// 迷你 QR 產生器（byte 模式、M 級容錯），回傳 boolean[][]
+function qrMatrix(text){
+  const data=[...new TextEncoder().encode(text)];
+  const ECC=[-1,10,16,26,18,24,16,18,22,22,26,30,22,22,24,24,28,28,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28];
+  const NB=[-1,1,1,1,2,2,4,4,4,5,5,5,8,9,9,10,10,11,13,14,16,17,17,18,20,21,23,25,26,28,29,31,33,35,37,38,40,43,45,47,49];
+  const raw=v=>{let r=(16*v+128)*v+64;if(v>=2){const n=Math.floor(v/7)+2;r-=(25*n-10)*n-55;if(v>=7)r-=36}return r};
+  const dataCw=v=>Math.floor(raw(v)/8)-ECC[v]*NB[v];
+  let ver=1;for(;ver<=40;ver++){const cc=ver<10?8:16;if(4+cc+data.length*8<=dataCw(ver)*8)break}
+  if(ver>40)throw new Error('內容太長');
+  const bits=[];const put=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>>i)&1)};
+  put(4,4);put(data.length,ver<10?8:16);data.forEach(b=>put(b,8));
+  const cap=dataCw(ver)*8;put(0,Math.min(4,cap-bits.length));while(bits.length%8)bits.push(0);
+  for(let p=0xEC;bits.length<cap;p^=0xEC^0x11)put(p,8);
+  const cw=[];for(let i=0;i<bits.length;i+=8)cw.push(bits.slice(i,i+8).reduce((a,b)=>a*2+b,0));
+  const mul=(x,y)=>{let z=0;for(let i=7;i>=0;i--){z=(z<<1)^((z>>>7)*0x11D);z^=((y>>>i)&1)*x}return z&255};
+  const deg=ECC[ver];let div=new Array(deg).fill(0);div[deg-1]=1;let root=1;
+  for(let i=0;i<deg;i++){for(let j=0;j<deg;j++){div[j]=mul(div[j],root);if(j+1<deg)div[j]^=div[j+1]}root=mul(root,2)}
+  const rem=d=>{const r=new Array(deg).fill(0);for(const b of d){const f=b^r.shift();r.push(0);div.forEach((c,i)=>r[i]^=mul(c,f))}return r};
+  const nb=NB[ver],rc=Math.floor(raw(ver)/8),ns=nb-rc%nb,sl=Math.floor(rc/nb);
+  const blocks=[];for(let i=0,k=0;i<nb;i++){const d=cw.slice(k,k+sl-deg+(i<ns?0:1));k+=d.length;const e=rem(d);if(i<ns)d.push(0);blocks.push(d.concat(e))}
+  const all=[];for(let i=0;i<blocks[0].length;i++)blocks.forEach((b,j)=>{if(i!==sl-deg||j>=ns)all.push(b[i])});
+  const N=ver*4+17,M=[...Array(N)].map(()=>Array(N).fill(false)),F=[...Array(N)].map(()=>Array(N).fill(false));
+  const set=(x,y,d)=>{M[y][x]=d;F[y][x]=true};
+  for(let i=0;i<N;i++){set(6,i,i%2==0);set(i,6,i%2==0)}
+  const finder=(x,y)=>{for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){const d=Math.max(Math.abs(dx),Math.abs(dy)),xx=x+dx,yy=y+dy;if(xx>=0&&xx<N&&yy>=0&&yy<N)set(xx,yy,d!=2&&d!=4)}};
+  finder(3,3);finder(N-4,3);finder(3,N-4);
+  const al=[];if(ver>1){const n=Math.floor(ver/7)+2,st=ver==32?26:Math.ceil((ver*4+4)/(n*2-2))*2;for(let i=0;i<n-1;i++)al.unshift(N-7-i*st);al.unshift(6)}
+  al.forEach((a,i)=>al.forEach((b,j)=>{if(!((i==0&&j==0)||(i==0&&j==al.length-1)||(i==al.length-1&&j==0)))for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)set(a+dx,b+dy,Math.max(Math.abs(dx),Math.abs(dy))!=1)}));
+  const fmt=mask=>{const d=(0<<3)|mask;let r=d;for(let i=0;i<10;i++)r=(r<<1)^((r>>>9)*0x537);const b=((d<<10)|r)^0x5412;const g=i=>((b>>>i)&1)!=0;
+    for(let i=0;i<=5;i++)set(8,i,g(i));set(8,7,g(6));set(8,8,g(7));set(7,8,g(8));for(let i=9;i<15;i++)set(14-i,8,g(i));
+    for(let i=0;i<8;i++)set(N-1-i,8,g(i));for(let i=8;i<15;i++)set(8,N-15+i,g(i));set(8,N-8,true)};
+  fmt(0);
+  if(ver>=7){let r=ver;for(let i=0;i<12;i++)r=(r<<1)^((r>>>11)*0x1F25);const b=(ver<<12)|r;for(let i=0;i<18;i++){const v=((b>>>i)&1)!=0,a=N-11+i%3,c=Math.floor(i/3);set(a,c,v);set(c,a,v)}}
+  let i=0;for(let right=N-1;right>=1;right-=2){if(right==6)right=5;for(let vv=0;vv<N;vv++)for(let j=0;j<2;j++){const x=right-j,up=((right+1)&2)==0,y=up?N-1-vv:vv;if(!F[y][x]&&i<all.length*8){M[y][x]=((all[i>>>3]>>>(7-(i&7)))&1)!=0;i++}}}
+  const MK=[(x,y)=>(x+y)%2==0,(x,y)=>y%2==0,(x,y)=>x%3==0,(x,y)=>(x+y)%3==0,(x,y)=>(Math.floor(x/3)+Math.floor(y/2))%2==0,(x,y)=>x*y%2+x*y%3==0,(x,y)=>(x*y%2+x*y%3)%2==0,(x,y)=>((x+y)%2+x*y%3)%2==0];
+  const apply=m=>{for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(!F[y][x]&&MK[m](x,y))M[y][x]=!M[y][x]};
+  const penalty=()=>{let p=0;const line=get=>{let run=1;for(let k=1;k<N;k++){if(get(k)==get(k-1)){run++;if(run==5)p+=3;else if(run>5)p++}else run=1}
+      const s=[];for(let k=0;k<N;k++)s.push(get(k)?1:0);const str=s.join('');for(const pat of['10111010000','00001011101']){let at=str.indexOf(pat);while(at>=0){p+=40;at=str.indexOf(pat,at+1)}}};
+    for(let y=0;y<N;y++)line(x=>M[y][x]);for(let x=0;x<N;x++)line(y=>M[y][x]);
+    for(let y=0;y<N-1;y++)for(let x=0;x<N-1;x++){const c=M[y][x];if(c==M[y][x+1]&&c==M[y+1][x]&&c==M[y+1][x+1])p+=3}
+    let dark=0;M.forEach(r=>r.forEach(c=>dark+=c));const k=Math.ceil(Math.abs(dark*20-N*N*10)/(N*N))-1;return p+k*10};
+  let best=0,bp=1e9;for(let m=0;m<8;m++){apply(m);fmt(m);const p=penalty();if(p<bp){bp=p;best=m}apply(m)}
+  apply(best);fmt(best);return M;
+}
+function qrSvg(text,px=6){const M=qrMatrix(text),N=M.length,q=4;let d='';M.forEach((r,y)=>r.forEach((c,x)=>{if(c)d+=`M${x+q} ${y+q}h1v1h-1z`}));return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${N+q*2} ${N+q*2}" width="${(N+q*2)*px}" height="${(N+q*2)*px}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`}
+
+function makePhoneQr(){const c=S?.agent?.ghConf||{},t=$('pToken').value.trim(),box=$('pQr');if(!/^(github_pat_|ghp_)[A-Za-z0-9_]+$/.test(t)){box.innerHTML='<small style="color:var(--bad)">權杖格式不對，應該是 github_pat_ 開頭</small>';return}
+  const url=`${c.pagesUrl.replace(/#.*$/,'')}#s=${encodeURIComponent(c.owner)}/${encodeURIComponent(c.dataRepo)}/${t}`;
+  box.innerHTML=qrSvg(url)+'<small>用手機相機掃描，會自動帶入設定並連線。<br>QR 內含權杖，請勿截圖或分享；2 分鐘後自動清除。</small>';$('pToken').value='';
+  clearTimeout(window._qrT);window._qrT=setTimeout(()=>{const b=$('pQr');if(b)b.innerHTML=''},120000)}
+let scanStream=null;
+async function startScan(){
+  if(!('BarcodeDetector' in window)||!navigator.mediaDevices?.getUserMedia){toast('這支手機的瀏覽器不支援網頁內掃描，請直接用相機 App 掃電腦上的 QR，會自動帶入');return}
+  try{const det=new BarcodeDetector({formats:['qr_code']});scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v=$('scanVid');v.srcObject=scanStream;await v.play();$('scan').classList.add('on');
+    const tick=async()=>{if(!scanStream)return;try{const r=await det.detect(v);const txt=r[0]?.rawValue;
+      if(txt){if(importSetup(txt)){stopScan();location.reload();return}if(/^(github_pat_|ghp_)[A-Za-z0-9_]+$/.test(txt.trim())){$('fToken').value=txt.trim();stopScan();toast('已帶入權杖，按「儲存並連線」');return}$('scanMsg').textContent='這不是圓桌的 QR，請再試一次'}}catch{}
+      requestAnimationFrame(tick)};tick()}
+  catch(e){stopScan();toast('無法開啟相機：'+(e.name==='NotAllowedError'?'請允許相機權限':e.message))}}
+function stopScan(){if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}$('scan').classList.remove('on');$('scanMsg').textContent='對準電腦上的 QR code'}
 const who=k=>META[k]?.name||k;
 function dl(n,t,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click()}
 function exportMd(){const L=S?.log||[];dl('圓桌紀錄.md',['# 圓桌會議紀錄','','| 時間 | 成員 | 類型 | 內容 | 狀態 |','|---|---|---|---|---|',...L.map(r=>`| ${r.t} | ${who(r.who)} | ${r.kind} | ${String(r.text).replace(/\|/g,'\\|')} | ${r.status} |`)].join('\n'),'text/markdown')}
