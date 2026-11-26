@@ -116,7 +116,7 @@ svg{display:block}
 .mention button.sel,.mention button:hover{background:#ffffff10}
 .mention button.off{opacity:.4}
 .dock{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(680px,94vw);z-index:20}
-.bar{display:flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:6px 6px 6px 16px;box-shadow:0 16px 40px #0007}
+.bar{display:flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:6px 6px 6px 6px;box-shadow:0 16px 40px #0007}
 .bar input{flex:1;min-width:0;background:none;border:0;outline:none;color:var(--ink);font:inherit;font-size:16px;height:40px}
 .bar input::placeholder{color:var(--faint)}
 .chip{height:34px;padding:0 10px;border-radius:11px;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;white-space:nowrap}
@@ -224,6 +224,15 @@ td .mini{width:22px;height:22px}
 .rmedia{position:relative;margin-top:10px;border-radius:10px;overflow:hidden;cursor:pointer;max-height:220px;border:1px solid var(--line)}.rmedia img{width:100%;max-height:220px;object-fit:cover;object-position:top;display:block}
 .shotbtn.vid::after{content:"▶";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#000a;color:#fff;font-size:9px;display:grid;place-items:center}
 .k.關卡{background:#1c2f3a;color:#8fd0f0}.k.修正{background:#2f2a1c;color:#f0d08a}
+.atts{display:none;gap:8px;overflow-x:auto;padding:0 2px 8px;scrollbar-width:none}.atts.on{display:flex}
+.att{position:relative;flex:none;display:flex;align-items:center;gap:8px;height:52px;padding:4px 30px 4px 4px;border-radius:12px;background:var(--panel);border:1px solid var(--line);max-width:220px}
+.att img,.att video{width:44px;height:44px;border-radius:8px;object-fit:cover;background:#000}
+.att>i{position:absolute;left:18px;top:50%;transform:translateY(-50%);font-style:normal;font-size:11px;color:#fff;text-shadow:0 0 4px #000}
+.att .ext{width:44px;height:44px;border-radius:8px;display:grid;place-items:center;background:var(--green-soft);color:#7fe0b6;font-size:11px;font-weight:700}
+.att .an{font-size:12px;line-height:1.3;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:130px}.att .an small{display:block;color:var(--faint);font-size:10.5px}
+.att button{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:#ffffff12;color:var(--muted);font-size:14px;line-height:1}
+body.dropping .bar{border-color:var(--green);box-shadow:0 0 0 3px var(--green-soft),0 16px 40px #0007}
+.go:disabled{opacity:.5}
 </style>
 </head>
 <body>
@@ -246,7 +255,9 @@ td .mini{width:22px;height:22px}
 
 <div class="ask" id="ask"></div>
 <div class="reply" id="reply"></div>
-<div class="dock"><div class="mention" id="mention"></div><div class="bar">
+<div class="dock"><div class="mention" id="mention"></div><div class="atts" id="atts"></div><div class="bar">
+  <input type="file" id="fileIn" multiple hidden onchange="addFiles(this.files);this.value=''">
+  <button class="mic" id="clipBtn" title="附加圖片、影片、檔案" onclick="$('fileIn').click()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6L15 6.6"/></svg></button>
   <input id="cmd" placeholder="下指令…" autocomplete="off" enterkeyhint="send">
   <button class="mic" id="micBtn" title="語音輸入" onclick="toggleMic()" style="display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
   <button class="chip" onclick="quick('截一張目前畫面的圖')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>截圖</span></button>
@@ -397,8 +408,10 @@ const ago=t=>{if(!t)return '—';const s=Math.round((Date.now()-t)/1000);return 
 setInterval(()=>{if(!LOCAL&&S){online=S.agent.online&&Date.now()-S.agent.seenAt<150000;render()}},15000);
 
 // ================= input =================
-async function submit(){const el=$('cmd'),text=el.value.trim();if(!text)return;el.value='';bubble('you',text.length>14?text.slice(0,14)+'…':text);
-  const ok=await send({type:'command',text});toast(!ok?'送出失敗':LOCAL?(S?.task?'已轉達（插話）':'已送出'):'已送出，本機約 10 秒內收到')}
+async function submit(){const el=$('cmd'),text=el.value.trim();if(!text&&!ATT.length)return;
+  let files=[];if(ATT.length){if(uploading)return;uploading=true;$('go').disabled=true;try{files=await uploadAll()}catch(e){toast('附件上傳失敗：'+e.message);uploading=false;$('go').disabled=false;return}uploading=false;$('go').disabled=false}
+  el.value='';const show=text||'請看附件';bubble('you',(show.length>14?show.slice(0,14)+'…':show)+(files.length?' 📎'+files.length:''));
+  const ok=await send({type:'command',text,files});toast(!ok?'送出失敗':LOCAL?(S?.task?'已轉達（插話）':'已送出'):'已送出，本機約 10 秒內收到')}
 function quick(t){$('cmd').value=t;submit()}
 $('cmd').addEventListener('keydown',e=>{
   if(mention.open&&!e.isComposing){
@@ -435,7 +448,7 @@ function renderDrawer(){
   const T=$('dTitle'),A=$('dActions'),B=$('dBody');A.innerHTML='';
   if(drawerKind==='log'){T.textContent='會議紀錄';A.innerHTML='<button class="btn" onclick="exportMd()">.md</button> <button class="btn" onclick="exportCsv()">.csv</button>';
     const kinds=['全部','指令','提問','決策','推選','關卡','檢查','修正','錯誤'];const rows=(S?.log||[]).filter(r=>logFilter==='全部'||r.kind===logFilter).slice().reverse();
-    B.innerHTML=`<div class="seg">${kinds.map(k=>`<button class="${k===logFilter?'on':''}" onclick="logFilter='${k}';renderDrawer()">${k}</button>`).join('')}</div>`+(rows.length?`<table><tr><th style="width:44px">時間</th><th style="width:30px"></th><th style="width:56px">類型</th><th>內容</th><th style="width:52px">狀態</th></tr>${rows.map(r=>`<tr><td>${esc(r.t)}</td><td>${(FACE[r.who]||FACE.you)()}</td><td><span class="k ${esc(r.kind)}">${esc(r.kind)}</span></td><td>${esc(r.text)}</td><td style="color:var(--muted);font-size:11.5px">${esc(r.status)}</td></tr>`).join('')}</table>`:'<div class="empty">還沒有紀錄</div>')}
+    B.innerHTML=`<div class="seg">${kinds.map(k=>`<button class="${k===logFilter?'on':''}" onclick="logFilter='${k}';renderDrawer()">${k}</button>`).join('')}</div>`+(rows.length?`<table><tr><th style="width:44px">時間</th><th style="width:30px"></th><th style="width:56px">類型</th><th>內容</th><th style="width:52px">狀態</th></tr>${rows.map(r=>`<tr><td>${esc(r.t)}</td><td>${(FACE[r.who]||FACE.you)()}</td><td><span class="k ${esc(r.kind)}">${esc(r.kind)}</span></td><td>${esc(cleanAtt(r.text))}</td><td style="color:var(--muted);font-size:11.5px">${esc(r.status)}</td></tr>`).join('')}</table>`:'<div class="empty">還沒有紀錄</div>')}
   if(drawerKind==='out'){T.textContent='成果';const O=S?.outputs||[];
     B.innerHTML=O.length?`<div class="gallery">${O.map(o=>(o.kind==='shot'||o.kind==='video')?`<div class="shot" data-f="${esc(o.file)}"><img alt="">${o.kind==='video'?'<i class="play">▶</i>':''}<div class="cap"><b>${esc(o.title)}</b>${esc(o.t)}</div></div>`:
       `<div class="res"><div class="row" style="color:var(--ink)"><b style="color:var(--ink)">${esc(o.title)}</b><span>${esc(META[o.by]?.name||'')} · ${esc(o.model)} · ${esc(o.t)}</span></div>${o.rows?o.rows.map(r=>`<div class="row">${esc(r.name)}<b class="${r.ok?'':'bad'}">${r.ok?'通過':'失敗'} · ${r.secs}s</b></div>`).join(''):''}${o.commit?`<div class="row">commit<b>${esc(o.commit)}</b></div>`:''}${o.note?`<div class="row" style="color:var(--warn)">${esc(o.note)}</div>`:''}${o.todo?.length?`<div class="todo"><b>待你驗收</b>${o.todo.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div>`:''}${o.file?`<div class="shot mini" data-f="${esc(o.file)}"><img alt=""></div>`:''}${o.files?.length?`<div class="row">改動<span>${o.files.length} 個檔</span></div>`:''}${o.summary?`<div class="sum">${esc(o.summary.split('\n').slice(-4).join('\n'))}</div>`:''}</div>`).join('')}</div>`:'<div class="empty">要求截圖或測試後，成果會出現在這裡</div>';
@@ -671,6 +684,41 @@ function rsFix(cw,t){
 function stopScan(){if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}$('scan').classList.remove('on');$('scanMsg').textContent='對準電腦上的 QR code'}
 // 簡易 markdown：粗體、行內程式碼、標題、清單（先跳脫再轉，避免注入）
 const md=t=>esc(t).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').split('\n').map(l=>{const m=l.match(/^\s*(#{1,4})\s+(.*)/);if(m)return `<div class="mh">${m[2]}</div>`;const li=l.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)/);if(li)return `<div class="li">${/^\s*\d/.test(l)?l.trim().match(/^\d+\./)[0]+' ':'• '}${li[1]}</div>`;return l.trim()?`<div>${l}</div>`:'<div class="gap"></div>'}).join('');
+const cleanAtt=t=>String(t??'').replace(/\n*【附件】[\s\S]*$/,m=>' 📎'+((m.match(/^- /gm)||[]).length));
+// ===== 附件：圖片、影片、任何檔案 =====
+let ATT=[],uploading=false;
+const fmtSize=n=>n>1048576?(n/1048576).toFixed(1)+'MB':Math.max(1,Math.round(n/1024))+'KB';
+function addFiles(list){for(const f of list){if(ATT.length>=12){toast('一次最多 12 個附件');break}const kind=f.type.startsWith('image/')?'image':f.type.startsWith('video/')?'video':'file';ATT.push({f,kind,url:kind!=='file'?URL.createObjectURL(f):null})}drawAtts()}
+function drawAtts(){const box=$('atts');box.innerHTML=ATT.map((a,i)=>`<div class="att">${a.kind==='image'?`<img src="${a.url}">`:a.kind==='video'?`<video src="${a.url}" muted playsinline></video><i>▶</i>`:`<span class="ext">${esc((a.f.name.split('.').pop()||'檔').slice(0,4).toUpperCase())}</span>`}<div class="an">${esc(a.f.name)}<small>${fmtSize(a.f.size)}</small></div><button onclick="rmAtt(${i})" aria-label="移除">×</button></div>`).join('');box.classList.toggle('on',ATT.length>0)}
+function rmAtt(i){const a=ATT.splice(i,1)[0];if(a?.url)URL.revokeObjectURL(a.url);drawAtts()}
+// 大圖先縮到 2400px 以內；影片在手機上就先抽出畫面（AI 不能直接看影片）
+async function shrinkImage(f){if(f.size<1.5e6||!/^image\/(png|jpeg|webp)$/.test(f.type))return f;const bm=await createImageBitmap(f);const s=Math.min(1,2400/Math.max(bm.width,bm.height));if(s===1&&f.size<6e6)return f;
+  const c=document.createElement('canvas');c.width=Math.round(bm.width*s);c.height=Math.round(bm.height*s);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(r,'image/jpeg',0.88))}
+async function videoFrames(f,max=12){const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';v.src=URL.createObjectURL(f);
+  await new Promise((ok,no)=>{v.onloadedmetadata=ok;v.onerror=()=>no(new Error('影片無法讀取'));setTimeout(()=>no(new Error('影片讀取逾時')),15000)});
+  const d=isFinite(v.duration)?v.duration:0,n=Math.max(1,Math.min(max,Math.ceil(d)||1)),s=Math.min(1,1280/Math.max(v.videoWidth||1280,v.videoHeight||720));
+  const c=document.createElement('canvas');c.width=Math.round((v.videoWidth||1280)*s);c.height=Math.round((v.videoHeight||720)*s);const g=c.getContext('2d'),out=[];
+  for(let i=0;i<n;i++){v.currentTime=Math.min(Math.max(0,d-0.05),(i+0.5)*d/n);await new Promise(r=>{v.onseeked=r;setTimeout(r,3000)});g.drawImage(v,0,0,c.width,c.height);out.push(await new Promise(r=>c.toBlob(r,'image/jpeg',0.8)))}
+  URL.revokeObjectURL(v.src);return out}
+async function putFile(blob,name){
+  if(LOCAL){const r=await fetch('/api/upload?name='+encodeURIComponent(name),{method:'POST',headers:{'X-Roundtable':'1'},body:blob});if(!r.ok)throw new Error(r.status===413?'檔案太大':'上傳 '+r.status);return await r.json()}
+  if(blob.size>20*1024*1024)throw new Error(`「${name}」超過 20MB，手機版傳不上去`);
+  const b64=await new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]);fr.onerror=no;fr.readAsDataURL(blob)});
+  const p=`uploads/${Date.now()}-${Math.random().toString(36).slice(2,7)}-${name.replace(/[^\w.\-]+/g,'_').slice(-60)}`;
+  const r=await ghApi('PUT',`/repos/${gh.owner}/${gh.repo}/contents/${p}`,{message:'attachment',content:b64,branch:gh.branch||'main'});if(!r.ok)throw new Error('GitHub '+r.status);return{gh:p}}
+async function uploadAll(){const out=[];let i=0;
+  for(const a of ATT){i++;toast(`上傳附件 ${i}/${ATT.length}…`);
+    if(a.kind==='video'){let frames=[];try{frames=await videoFrames(a.f)}catch(e){toast(e.message)}
+      const fr=[];for(const [j,b] of frames.entries())fr.push(await putFile(b,`${a.f.name}-f${j+1}.jpg`));
+      let ref={};if(LOCAL||a.f.size<=20*1024*1024)ref=await putFile(a.f,a.f.name);else if(!fr.length)throw new Error(`影片「${a.f.name}」太大，手機版傳不上去`);
+      out.push({kind:'video',name:a.f.name,...ref,frames:fr})}
+    else out.push({kind:a.kind,name:a.f.name,...await putFile(a.kind==='image'?await shrinkImage(a.f):a.f,a.f.name)})}
+  ATT.forEach(a=>a.url&&URL.revokeObjectURL(a.url));ATT=[];drawAtts();return out}
+// 貼上圖片、拖曳檔案
+addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])];if(fs.length){e.preventDefault();addFiles(fs)}});
+addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();document.body.classList.add('dropping')}});
+addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dropping')});
+addEventListener('drop',e=>{if(e.dataTransfer?.files?.length){e.preventDefault();document.body.classList.remove('dropping');addFiles(e.dataTransfer.files)}});
 const who=k=>META[k]?.name||k;
 function dl(n,t,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click()}
 function exportMd(){const L=S?.log||[];dl('圓桌紀錄.md',['# 圓桌會議紀錄','','| 時間 | 成員 | 類型 | 內容 | 狀態 |','|---|---|---|---|---|',...L.map(r=>`| ${r.t} | ${who(r.who)} | ${r.kind} | ${String(r.text).replace(/\|/g,'\\|')} | ${r.status} |`)].join('\n'),'text/markdown')}
