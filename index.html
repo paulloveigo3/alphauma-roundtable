@@ -43,6 +43,11 @@ svg{display:block}
 .center .title{font-size:15px;font-weight:600;min-height:22px}
 .center .sub{font-size:12px;color:var(--muted);margin-top:6px;min-height:18px;line-height:1.5}
 .steps{display:flex;justify-content:center;gap:14px;margin-top:12px}
+.dots{display:flex;gap:7px;padding:4px 0}.dots i{width:7px;height:7px;border-radius:50%;background:var(--green);animation:dot 1.2s ease-in-out infinite}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@keyframes dot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
+.token.idle .prog i{width:35%!important;animation:indet 1.3s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
 .step{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:10.5px;color:var(--faint);transition:.3s}
 .step b{width:9px;height:9px;border-radius:50%;background:var(--faint);transition:.3s}
 .step.on{color:var(--ink)}.step.on b{background:var(--green);box-shadow:0 0 10px var(--green)}
@@ -67,6 +72,11 @@ svg{display:block}
 .utip.low{color:#ff9a86;border-color:#5a2a22}
 .stopbtn{pointer-events:auto;margin-top:12px;height:28px;padding:0 14px;border-radius:14px;font-size:12px;color:#ffb3a3;background:#3a1f1c;border:1px solid #5a2a22;display:none}
 .stopbtn.on{display:inline-flex;align-items:center;gap:6px}
+.shotbtn{pointer-events:auto;display:none;margin:12px auto 0;position:relative;width:78px;height:52px;border-radius:12px;border:1px solid var(--line);background:#0b1310;padding:0;overflow:hidden;cursor:pointer;box-shadow:0 6px 18px #0007;transition:transform .2s}
+.shotbtn.on{display:block}.shotbtn:hover{transform:translateY(-2px)}
+.shotbtn img{width:100%;height:100%;object-fit:cover;opacity:.85}
+.shotbtn span{position:absolute;right:4px;bottom:4px;display:flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:#fff;background:#000a;border-radius:7px;padding:2px 5px}
+.shotbtn.new{animation:shotnew 1.6s ease-in-out 3}@keyframes shotnew{50%{box-shadow:0 0 0 4px var(--green-soft),0 6px 18px #0007}}
 .stopbtn i{width:8px;height:8px;border-radius:2px;background:currentColor}
 .mic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;color:var(--muted);flex:none}
 .mic:hover{background:#ffffff0d;color:var(--ink)}
@@ -206,6 +216,14 @@ td .mini{width:22px;height:22px}
   .table{width:46vw;height:40vh}.center{width:40vw}
   .seat.you .bot{--bot:44px;width:44px;height:44px}
 }
+.md{white-space:normal}.md b{color:var(--ink);font-weight:650}.md code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;background:#ffffff10;padding:1px 5px;border-radius:5px}
+.md .mh{font-weight:700;color:var(--ink);margin:6px 0 2px}.md .li{padding-left:1.1em;text-indent:-1.1em}.md .gap{height:8px}
+.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;background:#000a;color:#fff;display:grid;place-items:center;font-style:normal;font-size:13px;pointer-events:none}
+.shot{position:relative}.shot.mini{margin-top:8px;max-width:220px;cursor:pointer}.shot.mini img{width:100%;border-radius:8px}
+.todo{margin-top:8px;padding:8px 10px;border-radius:10px;background:#e0a24a14;border:1px solid #e0a24a33;font-size:12.5px;line-height:1.7}.todo b{display:block;color:var(--warn);margin-bottom:2px}
+.rmedia{position:relative;margin-top:10px;border-radius:10px;overflow:hidden;cursor:pointer;max-height:220px;border:1px solid var(--line)}.rmedia img{width:100%;max-height:220px;object-fit:cover;object-position:top;display:block}
+.shotbtn.vid::after{content:"▶";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#000a;color:#fff;font-size:9px;display:grid;place-items:center}
+.k.關卡{background:#1c2f3a;color:#8fd0f0}.k.修正{background:#2f2a1c;color:#f0d08a}
 </style>
 </head>
 <body>
@@ -221,7 +239,7 @@ td .mini{width:22px;height:22px}
 
 <main class="stage" id="stage">
   <div class="table"></div>
-  <div class="center"><div class="title" id="cTitle"></div><div class="sub" id="cSub"></div><div class="steps" id="steps"></div><button class="stopbtn" id="stopBtn" onclick="stopTask()"><i></i>停止</button></div>
+  <div class="center"><div class="title" id="cTitle"></div><div class="sub" id="cSub"></div><div class="steps" id="steps"></div><button class="stopbtn" id="stopBtn" onclick="stopTask()"><i></i>停止</button><button class="shotbtn" id="shotBtn" onclick="openShot()" aria-label="查看截圖"><img id="shotThumb" alt=""><span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg><b id="shotN"></b></span></button></div>
   <div id="scan"><video id="scanVid" playsinline muted></video><p id="scanMsg">對準電腦上的 QR code</p><button class="btn" onclick="stopScan()">取消</button></div>
   <div class="token" id="token"><div class="paper"></div><div class="prog"><i id="prog"></i></div><div class="stamp" id="stamp"></div></div>
 </main>
@@ -304,7 +322,7 @@ addEventListener('orientationchange',()=>[120,400].forEach(t=>setTimeout(()=>{pl
 
 const seen={bub:{},swap:{},q:null};
 function bubble(k,text){const b=$('bub-'+k);b.textContent=text;b.classList.add('on');const s=$('seat-'+k);s.classList.remove('talk');void s.offsetWidth;s.classList.add('talk');clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove('on'),Math.min(9000,3200+String(text).length*90))}
-const STEPS=[['assess','評估'],['nominate','推選'],['exec','執行'],['check','檢查'],['re','複查'],['vote','表決']];
+const STEPS=[['assess','評估'],['nominate','推選'],['exec','執行'],['gate','建置'],['check','檢查'],['fix','修正']];
 
 function render(){
   // top
@@ -327,7 +345,7 @@ function render(){
     if(here&&m.swapAt&&seen.swap[k]!==m.swapAt){if(seen.swap[k]!==undefined){mb.classList.remove('flip');void mb.offsetWidth;mb.classList.add('flip')}seen.swap[k]=m.swapAt}
     // role & vote
     const r=$('role-'+k),role=T&&here?(T.roles.exec===k?'exec':T.roles.check===k?'check':T.roles.re===k?'re':''):'';
-    r.className='role'+(role?' '+role+' on':'');r.textContent={exec:'執行',check:'檢查',re:'複查'}[role]||'';
+    r.className='role'+(role?' '+role+' on':'');r.textContent={exec:'負責',check:'檢查',re:'複查'}[role]||'';
     const v=$('vote-'+k),vv=T?.votes?.[k];v.className='vote'+(vv&&here?' '+vv+' on':'');v.textContent=vv==='yes'?'✓':vv==='no'?'✕':'';
     // mood
     seat.classList.remove('think','work');
@@ -342,16 +360,22 @@ function render(){
   for(const k of [...BOTS,'you']){const b=S?.bubbles?.[k];if(b&&b.at!==seen.bub[k]){const fresh=Date.now()-b.at<win&&seen.bub[k]!==undefined;seen.bub[k]=b.at;if(fresh&&(k==='you'||online))bubble(k,b.text)}else if(!b)seen.bub[k]=seen.bub[k]??0}
   // center
   if(!S||!online){$('cTitle').innerHTML=`<span class="hint">${!S&&!LOCAL&&!gh.token?'先到右上角設定 GitHub':'本機離線，座位都空著'}</span>`;$('cSub').textContent=S&&!LOCAL?`最後更新 ${ago(S.agent.seenAt)}`:'';$('steps').innerHTML=''}
+  else if(!T&&S.thinking&&BOTS.includes(S.thinking)){$('cTitle').textContent=`${who(S.thinking)} 正在想`;$('cSub').textContent='問答 · 不改檔';
+    if(!$('steps').querySelector('.dots'))$('steps').innerHTML='<div class="dots"><i></i><i></i><i></i></div>'}
   else if(!T){const n=BOTS.filter(k=>S.members[k]?.present).length;$('cTitle').innerHTML=`<span class="hint">${n?'下一個指令，大家會自己分工':'還沒有成員入座'}</span>`;$('cSub').textContent=S.queue?.length?`排隊中 ${S.queue.length}`:'';$('steps').innerHTML=''}
   else{$('cTitle').textContent=T.title||'';$('cSub').textContent=T.sub||'';
     const idx=STEPS.findIndex(s=>s[0]===T.stage),done=T.stage==='done',fail=T.stage==='failed';
     $('steps').innerHTML=STEPS.map(([s,n],j)=>`<div class="step ${done||j<idx?'done':j===idx?(T.stamp==='no'?'fail':'on'):fail&&j===0?'fail':''}"><b></b>${n}</div>`).join('')}
   const working=online&&((T&&!['done','failed'].includes(T.stage))||S?.thinking);$('stopBtn').classList.toggle('on',!!working);
+  const shots=(S?.outputs||[]).filter(o=>o.file),sb=$('shotBtn'),last=shots[0];
+  if(last&&!working){sb.classList.add('on');sb.classList.toggle('vid',last.kind==='video');$('shotN').textContent=shots.length>1?shots.length:'';if(sb.dataset.f!==last.file){const fresh=sb.dataset.f!==undefined;sb.dataset.f=last.file;sb.title=last.title||'截圖';imgSrc(last.file).then(s=>{if(sb.dataset.f===last.file)$('shotThumb').src=s});if(fresh){sb.classList.remove('new');void sb.offsetWidth;sb.classList.add('new')}}}
+  else sb.classList.remove('on');
   // token
   const tk=$('token');
-  if(T&&online){const P=POS(),at=T.tokenAt||'center';let p=at==='center'?[50,mobile()?36:37]:at==='you'?[50,mobile()?74:80]:[P[at][0]+(at==='claude'?0:at==='codex'?(mobile()?19:9):(mobile()?-19:-9)),P[at][1]+(at==='claude'?(mobile()?13:14):(mobile()?15:0))];
-    tk.style.left=p[0]+'%';tk.style.top=p[1]+'%';tk.classList.add('on');$('prog').style.width=(T.progress||0)+'%';
-    const sp=$('stamp');if(T.stamp){sp.textContent=T.stamp==='ok'?'✓':'✕';sp.style.background=T.stamp==='ok'?'var(--green)':'var(--bad)';sp.style.color=T.stamp==='ok'?'#06120d':'#fff';sp.classList.add('on')}else sp.classList.remove('on')}
+  const thinkAt=!T&&online&&BOTS.includes(S?.thinking)?S.thinking:null;tk.classList.toggle('idle',!!thinkAt);
+  if((T||thinkAt)&&online){const P=POS(),at=T?(T.tokenAt||'center'):thinkAt;let p=at==='center'?[50,mobile()?36:37]:at==='you'?[50,mobile()?74:80]:[P[at][0]+(at==='claude'?0:at==='codex'?(mobile()?19:9):(mobile()?-19:-9)),P[at][1]+(at==='claude'?(mobile()?13:14):(mobile()?15:0))];
+    tk.style.left=p[0]+'%';tk.style.top=p[1]+'%';tk.classList.add('on');$('prog').style.width=T?(T.progress||0)+'%':'';
+    const sp=$('stamp');if(T?.stamp){sp.textContent=T.stamp==='ok'?'✓':'✕';sp.style.background=T.stamp==='ok'?'var(--green)':'var(--bad)';sp.style.color=T.stamp==='ok'?'#06120d':'#fff';sp.classList.add('on')}else sp.classList.remove('on')}
   else tk.classList.remove('on');
   // question
   const ask=$('ask'),Q=S?.question;
@@ -361,7 +385,8 @@ function render(){
   else if((!Q||!online)&&seen.q!=='power')ask.classList.remove('on');
   // reply card (chat / answers)
   const rp=$('reply'),R=S?.reply,dis=JSON.parse(localStorage.getItem('roundtable.dismissed')||'[]');
-  if(R&&!(Q&&online)&&!dis.includes(R.id)){if(rp.dataset.id!==R.id){rp.dataset.id=R.id;rp.innerHTML=`<div class="who">${FACE[R.from]?.()||''}<b>${esc(META[R.from]?.name||'')}</b>${R.model?' · '+esc(R.model):''}</div><div class="txt">${esc(R.text)}</div><button class="ok">知道了</button>`;
+  if(R&&!(Q&&online)&&!dis.includes(R.id)){if(rp.dataset.id!==R.id){rp.dataset.id=R.id;rp.innerHTML=`<div class="who">${FACE[R.from]?.()||''}<b>${esc(META[R.from]?.name||'')}</b>${R.model?' · '+esc(R.model):''}</div><div class="txt md">${md(R.text)}</div>${R.media?`<div class="rmedia" data-f="${esc(R.media)}"><img alt="">${R.mediaKind==='video'?'<i class="play">▶</i>':''}</div>`:''}<button class="ok">知道了</button>`;
+    const rm=rp.querySelector('.rmedia');if(rm)imgSrc(rm.dataset.f).then(s=>{if(s){rm.querySelector('img').src=s;rm.onclick=()=>{$('viewerImg').src=s;$('viewer').classList.add('on')}}});
     rp.querySelector('.ok').onclick=()=>{rp.classList.remove('on');const d=JSON.parse(localStorage.getItem('roundtable.dismissed')||'[]');d.push(R.id);localStorage.setItem('roundtable.dismissed',JSON.stringify(d.slice(-50)));send({type:'dismiss',rid:R.id})}}
     rp.classList.add('on')}
   else rp.classList.remove('on');
@@ -403,20 +428,21 @@ function openDrawer(k){drawerKind=k;renderDrawer();$('drawer').classList.add('on
 function closeDrawer(){drawerKind=null;$('drawer').classList.remove('on');$('scrim').classList.remove('on')}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
 const imgCache={};
+async function openShot(){const f=$('shotBtn').dataset.f;if(!f)return;const s=await imgSrc(f);if(!s){toast('圖片讀取失敗');return}$('viewerImg').src=s;$('viewer').classList.add('on')}
 async function imgSrc(file){if(LOCAL)return '/outputs/'+file;if(imgCache[file])return imgCache[file];
   const r=await ghApi('GET',`/repos/${gh.owner}/${gh.repo}/contents/outputs/${file}?ref=${gh.branch||'main'}`,null,'application/vnd.github.raw+json');if(!r.ok)return '';return imgCache[file]=URL.createObjectURL(await r.blob())}
 function renderDrawer(){
   const T=$('dTitle'),A=$('dActions'),B=$('dBody');A.innerHTML='';
   if(drawerKind==='log'){T.textContent='會議紀錄';A.innerHTML='<button class="btn" onclick="exportMd()">.md</button> <button class="btn" onclick="exportCsv()">.csv</button>';
-    const kinds=['全部','指令','提問','決策','推選','換模型','否決','檢查','複查'];const rows=(S?.log||[]).filter(r=>logFilter==='全部'||r.kind===logFilter).slice().reverse();
+    const kinds=['全部','指令','提問','決策','推選','關卡','檢查','修正','錯誤'];const rows=(S?.log||[]).filter(r=>logFilter==='全部'||r.kind===logFilter).slice().reverse();
     B.innerHTML=`<div class="seg">${kinds.map(k=>`<button class="${k===logFilter?'on':''}" onclick="logFilter='${k}';renderDrawer()">${k}</button>`).join('')}</div>`+(rows.length?`<table><tr><th style="width:44px">時間</th><th style="width:30px"></th><th style="width:56px">類型</th><th>內容</th><th style="width:52px">狀態</th></tr>${rows.map(r=>`<tr><td>${esc(r.t)}</td><td>${(FACE[r.who]||FACE.you)()}</td><td><span class="k ${esc(r.kind)}">${esc(r.kind)}</span></td><td>${esc(r.text)}</td><td style="color:var(--muted);font-size:11.5px">${esc(r.status)}</td></tr>`).join('')}</table>`:'<div class="empty">還沒有紀錄</div>')}
   if(drawerKind==='out'){T.textContent='成果';const O=S?.outputs||[];
-    B.innerHTML=O.length?`<div class="gallery">${O.map(o=>o.kind==='shot'?`<div class="shot" data-f="${esc(o.file)}"><img alt=""><div class="cap"><b>${esc(o.title)}</b>${esc(o.t)}</div></div>`:
-      `<div class="res"><div class="row" style="color:var(--ink)"><b style="color:var(--ink)">${esc(o.title)}</b><span>${esc(META[o.by]?.name||'')} · ${esc(o.model)} · ${esc(o.t)}</span></div>${o.rows?o.rows.map(r=>`<div class="row">${esc(r.name)}<b class="${r.ok?'':'bad'}">${r.ok?'通過':'失敗'} · ${r.secs}s</b></div>`).join(''):''}${o.commit?`<div class="row">commit<b>${esc(o.commit)}</b></div>`:''}${o.files?.length?`<div class="row">改動<span>${o.files.length} 個檔</span></div>`:''}${o.summary?`<div class="sum">${esc(o.summary.split('\n').slice(-4).join('\n'))}</div>`:''}</div>`).join('')}</div>`:'<div class="empty">要求截圖或測試後，成果會出現在這裡</div>';
+    B.innerHTML=O.length?`<div class="gallery">${O.map(o=>(o.kind==='shot'||o.kind==='video')?`<div class="shot" data-f="${esc(o.file)}"><img alt="">${o.kind==='video'?'<i class="play">▶</i>':''}<div class="cap"><b>${esc(o.title)}</b>${esc(o.t)}</div></div>`:
+      `<div class="res"><div class="row" style="color:var(--ink)"><b style="color:var(--ink)">${esc(o.title)}</b><span>${esc(META[o.by]?.name||'')} · ${esc(o.model)} · ${esc(o.t)}</span></div>${o.rows?o.rows.map(r=>`<div class="row">${esc(r.name)}<b class="${r.ok?'':'bad'}">${r.ok?'通過':'失敗'} · ${r.secs}s</b></div>`).join(''):''}${o.commit?`<div class="row">commit<b>${esc(o.commit)}</b></div>`:''}${o.note?`<div class="row" style="color:var(--warn)">${esc(o.note)}</div>`:''}${o.todo?.length?`<div class="todo"><b>待你驗收</b>${o.todo.map(x=>`<div>• ${esc(x)}</div>`).join('')}</div>`:''}${o.file?`<div class="shot mini" data-f="${esc(o.file)}"><img alt=""></div>`:''}${o.files?.length?`<div class="row">改動<span>${o.files.length} 個檔</span></div>`:''}${o.summary?`<div class="sum">${esc(o.summary.split('\n').slice(-4).join('\n'))}</div>`:''}</div>`).join('')}</div>`:'<div class="empty">要求截圖或測試後，成果會出現在這裡</div>';
     B.querySelectorAll('.shot').forEach(async el=>{const src=await imgSrc(el.dataset.f);el.querySelector('img').src=src;el.onclick=()=>{$('viewerImg').src=src;$('viewer').classList.add('on')}})}
   if(drawerKind==='model'){T.textContent='模型與用量';const pol=S?.policy||'fastgood';
     B.innerHTML=`<div class="note"><div class="seg" style="margin:0 0 8px"><button class="${pol==='fastgood'?'on':''}" onclick="send({type:'policy',policy:'fastgood'})">又快又好</button><button class="${pol==='correct'?'on':''}" onclick="send({type:'policy',policy:'correct'})">正確優先</button></div>
-      預設用<b>能完成的最低模型</b>、最少步驟。被兩人否決 → 執行者<b>升一級</b>重做；已是最高就換人。用量超過 75% 的成員避開執行。用量為本機依 token 數估算。</div>`+
+      <b>負責制</b>：一人負責到底，圓桌自動跑建置，檢查者只開清單（必修／建議／要你做），負責人就地修一次就交件；AI 做不到的驗收會列給你。剩不到 10% 的成員非必要不出場。</div>`+
       BOTS.map(k=>{const m=S?.members?.[k];if(!m)return '';const here=online&&m.present;return `<div class="mcard ${here?'':'off'}"><div class="mhead">${here?FACE[k]():FACE.chair()}<b style="color:${META[k].color}">${META[k].name}</b><span style="font-size:12px;color:var(--muted)">${here?esc(m.version||''):esc(m.reason||'未連線')}</span></div>
       <div class="ladder">${m.ladder.map((x,i)=>`<button class="${i===m.cur?'cur':''}" ${here?`onclick="send({type:'tier',member:'${k}',tier:${i}})"`:''} title="能力 ${x.power} · 速度 ${x.speed}">${esc(x.label)}</button>`).join('')}</div>
       <div class="meter"><i style="width:${m.usagePct||0}%;background:${(m.usagePct||0)>75?'var(--bad)':META[k].hex}"></i></div><div class="mfoot"><span>${m.usageSrc==='official'?`官方用量 ${m.usagePct}%${m.limits?`（5小時 ${m.limits.short??'—'}%／本週 ${m.limits.week??'—'}%）`:''}`:`本週用量（估算）${m.usagePct||0}%`}</span><span>週一重置</span></div></div>`}).join('')}
@@ -643,6 +669,8 @@ function rsFix(cw,t){
 }
 
 function stopScan(){if(scanStream){scanStream.getTracks().forEach(t=>t.stop());scanStream=null}$('scan').classList.remove('on');$('scanMsg').textContent='對準電腦上的 QR code'}
+// 簡易 markdown：粗體、行內程式碼、標題、清單（先跳脫再轉，避免注入）
+const md=t=>esc(t).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').split('\n').map(l=>{const m=l.match(/^\s*(#{1,4})\s+(.*)/);if(m)return `<div class="mh">${m[2]}</div>`;const li=l.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)/);if(li)return `<div class="li">${/^\s*\d/.test(l)?l.trim().match(/^\d+\./)[0]+' ':'• '}${li[1]}</div>`;return l.trim()?`<div>${l}</div>`:'<div class="gap"></div>'}).join('');
 const who=k=>META[k]?.name||k;
 function dl(n,t,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type}));a.download=n;a.click()}
 function exportMd(){const L=S?.log||[];dl('圓桌紀錄.md',['# 圓桌會議紀錄','','| 時間 | 成員 | 類型 | 內容 | 狀態 |','|---|---|---|---|---|',...L.map(r=>`| ${r.t} | ${who(r.who)} | ${r.kind} | ${String(r.text).replace(/\|/g,'\\|')} | ${r.status} |`)].join('\n'),'text/markdown')}
