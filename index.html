@@ -223,7 +223,7 @@ td .mini{width:22px;height:22px}
 .todo{margin-top:8px;padding:8px 10px;border-radius:10px;background:#e0a24a14;border:1px solid #e0a24a33;font-size:12.5px;line-height:1.7}.todo b{display:block;color:var(--warn);margin-bottom:2px}
 .rmedia{position:relative;margin-top:10px;border-radius:10px;overflow:hidden;cursor:pointer;max-height:220px;border:1px solid var(--line)}.rmedia img{width:100%;max-height:220px;object-fit:cover;object-position:top;display:block}
 .shotbtn.vid::after{content:"▶";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#000a;color:#fff;font-size:9px;display:grid;place-items:center}
-.k.關卡{background:#1c2f3a;color:#8fd0f0}.k.修正{background:#2f2a1c;color:#f0d08a}
+.k.操作{background:#2a1c3a;color:#c9a9ff}.k.關卡{background:#1c2f3a;color:#8fd0f0}.k.修正{background:#2f2a1c;color:#f0d08a}
 .atts{display:none;gap:8px;overflow-x:auto;padding:0 2px 8px;scrollbar-width:none}.atts.on{display:flex}
 .att{position:relative;flex:none;display:flex;align-items:center;gap:8px;height:52px;padding:4px 30px 4px 4px;border-radius:12px;background:var(--panel);border:1px solid var(--line);max-width:220px}
 .att img,.att video{width:44px;height:44px;border-radius:8px;object-fit:cover;background:#000}
@@ -748,10 +748,14 @@ async function saveGhLocal(){const b=$('ghSave'),msg=$('ghMsg');b.disabled=true;
   catch{msg.className='msg bad';msg.textContent='本機伺服器沒有回應'}b.disabled=false}
 function copyText(t){navigator.clipboard?.writeText(t).then(()=>toast('已複製'),()=>toast('複製失敗'))}
 // ================= power =================
-if(LOCAL)$('powerBtn').style.display='';
-function askPower(){const el=$('ask');el.innerHTML=`<div class="q">${FACE.you()}<span>要關閉圓桌嗎？</span></div><div class="opts"><button data-a="all">完全關閉<br><small style="color:var(--muted)">手機也無法下指令</small></button><button data-a="win">只關視窗<br><small style="color:var(--muted)">背景繼續，手機可用</small></button><button data-a="no">取消</button></div>`;
+$('powerBtn').style.display='';
+function askPower(){const el=$('ask');
+  if(!LOCAL){el.innerHTML=`<div class="q">${FACE.you()}<span>要重新啟動電腦上的圓桌嗎？</span></div><div class="opts"><button data-a="re">重新啟動<br><small style="color:var(--muted)">約 30 秒後恢復</small></button><button data-a="no">取消</button></div>`;el.classList.add('on');seen.q='power';
+    el.querySelectorAll('button').forEach(b=>b.onclick=async()=>{el.classList.remove('on');seen.q=null;if(b.dataset.a!=='re')return;toast((await send({type:'restart'}))?'已送出，電腦約 10 秒內收到':'送出失敗')});return}
+  el.innerHTML=`<div class="q">${FACE.you()}<span>要關閉圓桌嗎？</span></div><div class="opts"><button data-a="re">重新啟動<br><small style="color:var(--muted)">套用更新</small></button><button data-a="all">完全關閉<br><small style="color:var(--muted)">手機也無法下指令</small></button><button data-a="win">只關視窗<br><small style="color:var(--muted)">背景繼續，手機可用</small></button><button data-a="no">取消</button></div>`;
   el.classList.add('on');seen.q='power';
   el.querySelectorAll('button').forEach(b=>b.onclick=async()=>{el.classList.remove('on');seen.q=null;const a=b.dataset.a;if(a==='no')return;
+    if(a==='re'){try{await fetch('/api/restart',{method:'POST',headers:{'X-Roundtable':'1'}})}catch{}toast('重新啟動中…');setTimeout(()=>location.reload(),4000);return}
     if(a==='all'){try{await fetch('/api/shutdown',{method:'POST',headers:{'X-Roundtable':'1'}})}catch{}}
     window.close();setTimeout(()=>{document.body.innerHTML=`<div style="height:100vh;display:grid;place-items:center;color:#7f918a;font-size:14px">${a==='all'?'圓桌已關閉，':''}可以關掉這個視窗了</div>`},400)})}
 render();connect();
